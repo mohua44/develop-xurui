@@ -491,6 +491,16 @@
         function generateCCode(action, params) {
             let code = `#include <stdio.h>
 #include <math.h>
+#include <string.h>
+
+// 运动参数结构体
+typedef struct {
+    char action[16];
+    float distance;
+    float speed;
+    float angle;
+    float duration;
+} MotionParams;
 
 // 机器人状态
 typedef struct {
@@ -500,51 +510,50 @@ typedef struct {
 } RobotState;
 
 RobotState robot;
-robot.x = 50.0;
-robot.y = 120.0;
-robot.rotation = 0.0;
 
-void update_robot_position(float deltaX, float deltaY) {
-    robot.x += deltaX;
-    robot.y += deltaY;
-
-    // 边界检查
-    if (robot.x < 5) robot.x = 5;
-    if (robot.x > 795) robot.x = 795;
-    if (robot.y < 5) robot.y = 5;
-    if (robot.y > 495) robot.y = 495;
+void print_motion_params(const MotionParams *params) {
+    printf("{\\"action\\":\\"%s\\",\\"distance\\":%f,\\"speed\\":%f,\\"angle\\":%f,\\"duration\\":%f}\\n",
+           params->action, params->distance, params->speed, params->angle, params->duration);
 }
 
 void forward(int speed, int distance) {
-    printf("机器人以速度 %d 前进 %d 距离\\n", speed, distance);
-
-    // 计算移动距离
-    float radians = robot.rotation * M_PI / 180.0;
-    float deltaX = cos(radians) * distance;
-    float deltaY = sin(radians) * distance;
-
-    update_robot_position(deltaX, deltaY);
+    MotionParams params;
+    strcpy(params.action, "forward");
+    params.distance = distance;
+    params.speed = speed;
+    params.angle = robot.rotation;
+    params.duration = distance / (speed * 10.0);
+    print_motion_params(&params);
 }
 
 void back(int speed, int distance) {
-    printf("机器人以速度 %d 后退 %d 距离\\n", speed, distance);
-
-    // 计算移动距离 (反向)
-    float radians = robot.rotation * M_PI / 180.0;
-    float deltaX = -cos(radians) * distance;
-    float deltaY = -sin(radians) * distance;
-
-    update_robot_position(deltaX, deltaY);
+    MotionParams params;
+    strcpy(params.action, "back");
+    params.distance = -distance;
+    params.speed = speed;
+    params.angle = robot.rotation;
+    params.duration = distance / (speed * 10.0);
+    print_motion_params(&params);
 }
 
 void turn_left(int degree) {
-    printf("机器人左转 %d 度\\n", degree);
-    robot.rotation = fmod(robot.rotation - degree, 360.0);
+    MotionParams params;
+    strcpy(params.action, "turn");
+    params.distance = 0;
+    params.speed = 0;
+    params.angle = -degree;
+    params.duration = degree / 90.0; // 假设90度/秒的旋转速度
+    print_motion_params(&params);
 }
 
 void turn_right(int degree) {
-    printf("机器人右转 %d 度\\n", degree);
-    robot.rotation = fmod(robot.rotation + degree, 360.0);
+    MotionParams params;
+    strcpy(params.action, "turn");
+    params.distance = 0;
+    params.speed = 0;
+    params.angle = degree;
+    params.duration = degree / 90.0; // 假设90度/秒的旋转速度
+    print_motion_params(&params);
 }
 
 int main() {
@@ -590,7 +599,6 @@ int main() {
                     const forwardDistance = parseInt(document.getElementById('forwardDistance').value);
                     cCode = generateCCode('forward', {speed: forwardSpeed, distance: forwardDistance});
                     command = `    forward(${forwardSpeed}, ${forwardDistance});`;
-                    moveRobotWithRotation(robot, forwardDistance, forwardSpeed);
                     break;
 
                 case 'back':
@@ -598,54 +606,38 @@ int main() {
                     const backDistance = parseInt(document.getElementById('backDistance').value);
                     cCode = generateCCode('back', {speed: backSpeed, distance: backDistance});
                     command = `    back(${backSpeed}, ${backDistance});`;
-                    moveRobotWithRotation(robot, -backDistance, backSpeed);
                     break;
 
                 case 'left':
                     const leftDegree = parseInt(document.getElementById('turnDegree').value);
                     cCode = generateCCode('left', {degree: leftDegree});
                     command = `    turn_left(${leftDegree});`;
-                    const currentRot = parseInt(robot.dataset.rotation || '0');
-                    const newRot = (currentRot - leftDegree) % 360;
-                    robot.style.transform = `rotate(${newRot}deg)`;
-                    robot.dataset.rotation = newRot;
-                    updatePositionDisplay(
-                        parseFloat(robot.style.left || '50'),
-                        parseFloat(robot.style.top || '120'),
-                        newRot
-                    );
                     break;
 
                 case 'right':
                     const rightDegree = parseInt(document.getElementById('turnDegree').value);
                     cCode = generateCCode('right', {degree: rightDegree});
                     command = `    turn_right(${rightDegree});`;
-                    const rightCurrentRot = parseInt(robot.dataset.rotation || '0');
-                    const rightNewRot = (rightCurrentRot + rightDegree) % 360;
-                    robot.style.transform = `rotate(${rightNewRot}deg)`;
-                    robot.dataset.rotation = rightNewRot;
-                    updatePositionDisplay(
-                        parseFloat(robot.style.left || '50'),
-                        parseFloat(robot.style.top || '120'),
-                        rightNewRot
-                    );
                     break;
             }
 
-            // 执行C代码并更新机器人位置
+            // 执行C代码并获取运动参数
             picocjs.runC(cCode, (output) => {
                 const logElement = document.getElementById('log');
                 logElement.textContent += output + '\n';
                 logElement.scrollTop = logElement.scrollHeight;
 
-                // 从C代码执行结果中获取机器人状态
-                const robotState = picocjs.getGlobal('robot');
-                if (robotState) {
-                    const robot = document.getElementById('robot');
-                    robot.style.left = robotState.x + 'px';
-                    robot.style.top = robotState.y + 'px';
-                    robot.style.transform = `rotate(${robotState.rotation}deg)`;
-                    robot.dataset.rotation = robotState.rotation;
+                try {
+                    // 解析C代码输出的JSON运动参数
+                    const jsonStart = output.indexOf('{');
+                    const jsonEnd = output.lastIndexOf('}') + 1;
+                    if (jsonStart !== -1 && jsonEnd !== -1) {
+                        const jsonStr = output.substring(jsonStart, jsonEnd);
+                        const motionParams = JSON.parse(jsonStr);
+                        executeMotion(motionParams);
+                    }
+                } catch (e) {
+                    console.error('JSON解析错误:', e);
                 }
             });
 
@@ -797,8 +789,65 @@ int main() {
             document.getElementById('robotAngle').textContent = Math.round(angle);
         }
 
-        // 根据旋转角度计算并移动机器人
-        function moveRobotWithRotation(robot, distance, speed) {
+        // 执行运动参数
+        function executeMotion(params) {
+            const robot = document.getElementById('robot');
+            
+            switch(params.action) {
+                case 'forward':
+                case 'back':
+                    // 移动机器人
+                    const currentLeft = parseFloat(robot.style.left || '50');
+                    const currentTop = parseFloat(robot.style.top || '120');
+                    const radians = params.angle * Math.PI / 180;
+                    
+                    const deltaX = Math.cos(radians) * params.distance;
+                    const deltaY = Math.sin(radians) * params.distance;
+                    
+                    let newLeft = currentLeft + deltaX;
+                    let newTop = currentTop + deltaY;
+                    
+                    // 边界检查
+                    const sim = document.getElementById('robotSimulation');
+                    const robotWidth = robot.offsetWidth;
+                    const robotHeight = robot.offsetHeight;
+                    
+                    if (newLeft < 5) newLeft = 5;
+                    if (newLeft + robotWidth > sim.offsetWidth - 5) newLeft = sim.offsetWidth - robotWidth - 5;
+                    if (newTop < 5) newTop = 5;
+                    if (newTop + robotHeight > sim.offsetHeight - 5) newTop = sim.offsetHeight - robotHeight - 5;
+                    
+                    // 设置动画
+                    robot.style.transition = `left ${params.duration}s linear, top ${params.duration}s linear`;
+                    robot.style.left = newLeft + 'px';
+                    robot.style.top = newTop + 'px';
+                    
+                    // 更新坐标显示
+                    updatePositionDisplay(newLeft, newTop, params.angle);
+                    break;
+                    
+                case 'turn':
+                    // 旋转机器人
+                    const currentRot = parseInt(robot.dataset.rotation || '0');
+                    const newRot = (currentRot + params.angle) % 360;
+                    
+                    robot.style.transition = `transform ${params.duration}s ease`;
+                    robot.style.transform = `rotate(${newRot}deg)`;
+                    robot.dataset.rotation = newRot;
+                    
+                    // 更新坐标显示
+                    updatePositionDisplay(
+                        parseFloat(robot.style.left || '50'),
+                        parseFloat(robot.style.top || '120'),
+                        newRot
+                    );
+                    break;
+            }
+            
+            // 记录运动
+            document.getElementById('log').textContent += 
+                `执行动作: ${params.action}, 距离: ${params.distance}, 速度: ${params.speed}, 角度: ${params.angle}\n`;
+        }
             // 获取当前位置和旋转角度
             const currentLeft = parseFloat(robot.style.left || '50');
             const currentTop = parseFloat(robot.style.top || '120');
