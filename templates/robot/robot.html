@@ -518,7 +518,6 @@ void print_motion_params(MotionParams *params) {
     printf("{\\"action\\":\\"%s\\",\\"distance\\":%f,\\"speed\\":%f,\\"angle\\":%f,\\"duration\\":%f}\\n",
            params->action, params->distance, params->speed, params->angle, params->duration);
 }
-
 void forward(int speed, int distance) {
     MotionParams params;
     strcpy(params.action, "forward");
