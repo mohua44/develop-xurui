@@ -492,6 +492,9 @@
             let code = `#include <stdio.h>
 #include <math.h>
 #include <string.h>
+#include <stddef.h>
+
+#define const
 
 // 运动参数结构体
 typedef struct {
@@ -511,7 +514,7 @@ typedef struct {
 
 RobotState robot;
 
-void print_motion_params(const MotionParams *params) {
+void print_motion_params(MotionParams *params) {
     printf("{\\"action\\":\\"%s\\",\\"distance\\":%f,\\"speed\\":%f,\\"angle\\":%f,\\"duration\\":%f}\\n",
            params->action, params->distance, params->speed, params->angle, params->duration);
 }
@@ -519,40 +522,40 @@ void print_motion_params(const MotionParams *params) {
 void forward(int speed, int distance) {
     MotionParams params;
     strcpy(params.action, "forward");
-    params.distance = distance;
-    params.speed = speed;
+    params.distance = (float)distance;
+    params.speed = (float)speed;
     params.angle = robot.rotation;
-    params.duration = distance / (speed * 10.0);
+    params.duration = (float)distance / ((float)speed * 10.0f);
     print_motion_params(&params);
 }
 
 void back(int speed, int distance) {
     MotionParams params;
     strcpy(params.action, "back");
-    params.distance = -distance;
-    params.speed = speed;
+    params.distance = -(float)distance;
+    params.speed = (float)speed;
     params.angle = robot.rotation;
-    params.duration = distance / (speed * 10.0);
+    params.duration = (float)distance / ((float)speed * 10.0f);
     print_motion_params(&params);
 }
 
 void turn_left(int degree) {
     MotionParams params;
     strcpy(params.action, "turn");
-    params.distance = 0;
-    params.speed = 0;
-    params.angle = -degree;
-    params.duration = degree / 90.0; // 假设90度/秒的旋转速度
+    params.distance = 0.0f;
+    params.speed = 0.0f;
+    params.angle = -(float)degree;
+    params.duration = (float)degree / 90.0f; // 假设90度/秒的旋转速度
     print_motion_params(&params);
 }
 
 void turn_right(int degree) {
     MotionParams params;
     strcpy(params.action, "turn");
-    params.distance = 0;
-    params.speed = 0;
-    params.angle = degree;
-    params.duration = degree / 90.0; // 假设90度/秒的旋转速度
+    params.distance = 0.0f;
+    params.speed = 0.0f;
+    params.angle = (float)degree;
+    params.duration = (float)degree / 90.0f; // 假设90度/秒的旋转速度
     print_motion_params(&params);
 }
 
